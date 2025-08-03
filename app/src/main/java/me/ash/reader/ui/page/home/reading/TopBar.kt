@@ -24,19 +24,16 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.rounded.MenuOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
@@ -48,6 +45,10 @@ import me.ash.reader.infrastructure.preference.LocalSharedContent
 import me.ash.reader.infrastructure.preference.ReadingPageTonalElevationPreference
 import me.ash.reader.ui.component.base.FeedbackIconButton
 import me.ash.reader.ui.page.adaptive.NavigationAction
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.Description
+
 
 private val sizeSpec = spring<IntSize>(stiffness = 700f)
 
@@ -55,34 +56,37 @@ private val sizeSpec = spring<IntSize>(stiffness = 700f)
 @Composable
 fun TopBar(
     isShow: Boolean,
-    isScrolled: Boolean = false,
-    title: String? = "",
-    link: String? = "",
+    isScrolled: Boolean,
+    title: String?,
+    link: String?,
+    onClick: (() -> Unit)?,
     navigationAction: NavigationAction,
-    onClick: (() -> Unit)? = null,
-    onNavButtonClick: (NavigationAction) -> Unit = {},
+    onNavButtonClick: (NavigationAction) -> Unit,
     onNavigateToStylePage: () -> Unit,
+    onSummarize: (() -> Unit)?
 ) {
     val context = LocalContext.current
     val sharedContent = LocalSharedContent.current
     val isOutlined =
         LocalReadingPageTonalElevation.current == ReadingPageTonalElevationPreference.Outlined
 
-    val containerColor by
-        animateColorAsState(
-            with(MaterialTheme.colorScheme) {
-                if (isOutlined || !isScrolled) surface else surfaceContainer
-            },
-            label = "",
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        )
+    val containerColor by animateColorAsState(
+        with(MaterialTheme.colorScheme) {
+            if (isOutlined || !isScrolled) surface else surfaceContainer
+        },
+        label = "",
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+    )
 
-    Box(modifier = Modifier.fillMaxSize().zIndex(1f), contentAlignment = Alignment.TopCenter) {
+    Box(
+        modifier = Modifier.fillMaxSize().zIndex(1f),
+        contentAlignment = Alignment.TopCenter
+    ) {
         Column(modifier = Modifier.drawBehind { drawRect(containerColor) }) {
             Spacer(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
             )
             AnimatedVisibility(
                 visible = isShow,
@@ -93,26 +97,25 @@ fun TopBar(
                     title = {},
                     modifier =
                         if (onClick == null) Modifier
-                        else
-                            Modifier.clickable(
-                                onClick = onClick,
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                            ),
+                        else Modifier.clickable(
+                            onClick = onClick, // This onClick is now correctly typed as (() -> Unit)?
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ),
                     windowInsets = WindowInsets(0.dp),
                     navigationIcon = {
-                        val imageVector =
-                            when (navigationAction) {
-                                NavigationAction.Close -> Icons.Rounded.Close
-                                NavigationAction.HideList -> Icons.AutoMirrored.Rounded.MenuOpen
-                                NavigationAction.ExpandList -> Icons.Rounded.Menu
-                            }
-                        val contentDescription =
-                            when (navigationAction) {
-                                NavigationAction.Close -> stringResource(R.string.close)
-                                NavigationAction.HideList -> "Hide list"
-                                NavigationAction.ExpandList -> "Expand list"
-                            }
+                        val imageVector = when (navigationAction) {
+                            NavigationAction.Close -> Icons.Rounded.Close
+                            NavigationAction.HideList -> Icons.AutoMirrored.Rounded.MenuOpen
+                            NavigationAction.ExpandList -> Icons.Rounded.Menu
+                            // Consider adding an else branch if NavigationAction can have other states
+                        }
+                        val contentDescription = when (navigationAction) {
+                            NavigationAction.Close -> stringResource(R.string.close)
+                            NavigationAction.HideList -> "Hide list"
+                            NavigationAction.ExpandList -> "Expand list"
+                            // Consider adding an else branch
+                        }
                         FeedbackIconButton(
                             imageVector = imageVector,
                             contentDescription = contentDescription,
@@ -122,6 +125,14 @@ fun TopBar(
                         }
                     },
                     actions = {
+                        if (onSummarize != null) {
+                            IconButton(onClick = onSummarize) { // onSummarize is (() -> Unit)? but used in a non-null context here due to the if check
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = "Summarize"
+                                )
+                            }
+                        }
                         FeedbackIconButton(
                             modifier = Modifier.size(22.dp),
                             imageVector = Icons.Outlined.Palette,
@@ -136,12 +147,12 @@ fun TopBar(
                             contentDescription = stringResource(R.string.share),
                             tint = MaterialTheme.colorScheme.onSurface,
                         ) {
-                            sharedContent.share(context, title, link)
+                            sharedContent.share(context, title ?: "", link ?: "") // Provide default for title/link if null
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    }
                 )
             }
+
             if (isOutlined && isScrolled) {
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
