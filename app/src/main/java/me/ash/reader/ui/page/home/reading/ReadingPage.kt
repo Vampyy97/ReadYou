@@ -81,7 +81,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.rememberLazyListState
-
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 
 import androidx.compose.material3.BasicAlertDialog
@@ -312,10 +312,12 @@ fun ReadingPage(
                                                 contentPadding = PaddingValues(end = 4.dp)
                                             ) {
                                                 item {
-                                                    Text(
-                                                        text = textContent,
-                                                        style = MaterialTheme.typography.bodyMedium
-                                                    )
+                                                    SelectionContainer {
+                                                        Text(
+                                                            text = textContent,
+                                                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
