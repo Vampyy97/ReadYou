@@ -39,11 +39,13 @@ private fun contentPadding(isLastItem: Boolean): PaddingValues = if (isLastItem)
 @Composable
 private fun FeedItemImpl(
     feed: Feed,
+    showOnlyRead: Boolean = false,
     isLastItem: () -> Boolean = { false },
     onLongClickCallback: (String) -> Unit = {},
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {}
 ) {
+    if (showOnlyRead && feed.important != 0) return
     val scope = rememberCoroutineScope()
     Row(
         modifier = Modifier
@@ -106,6 +108,7 @@ private fun FeedItemImpl(
 @Composable
 fun FeedItem(
     feed: Feed,
+    showOnlyRead: Boolean = false,
     isLastItem: () -> Boolean = { false },
     isExpanded: () -> Boolean,
     feedOptionViewModel: FeedOptionViewModel = hiltViewModel(),
@@ -116,6 +119,7 @@ fun FeedItem(
     RYExtensibleVisibility(visible = isExpanded()) {
         FeedItemImpl(
             feed = feed,
+            showOnlyRead = showOnlyRead,
             isLastItem = isLastItem,
             onClick = onClick,
             onLongClick = onLongClick,

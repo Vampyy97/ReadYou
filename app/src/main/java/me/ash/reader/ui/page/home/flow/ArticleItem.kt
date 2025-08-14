@@ -179,33 +179,15 @@ fun ArticleItem(
                     if (isStarred) {
                         StarredIcon()
                     }
-
-                    if (articleListDate.value) {
-                        // Time
-                        Text(
-                            modifier = Modifier,
-                            text = timeString ?: "",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
+                    // Time removed
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Spacer(Modifier.width(if (articleListFeedIcon.value) 30.dp else 0.dp))
 
-                    if (articleListDate.value) {
-                        // Time
-                        Text(
-                            modifier = Modifier.weight(1f),
-                            text = timeString ?: "",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                        // Starred
-                        if (isStarred) {
-                            StarredIcon()
-                        }
+                    // Time removed
+                    if (isStarred) {
+                        StarredIcon()
                     }
                 }
             }

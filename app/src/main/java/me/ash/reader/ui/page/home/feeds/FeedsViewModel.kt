@@ -31,14 +31,13 @@ import me.ash.reader.domain.data.DiffMapHolder
 import me.ash.reader.domain.data.FilterState
 import me.ash.reader.domain.data.FilterStateUseCase
 import me.ash.reader.domain.data.GroupWithFeedsListUseCase
+import android.util.Log as ALog
 import me.ash.reader.domain.service.SyncWorker
 import me.ash.reader.infrastructure.di.ApplicationScope
 import me.ash.reader.infrastructure.di.DefaultDispatcher
 import me.ash.reader.infrastructure.di.IODispatcher
 import me.ash.reader.infrastructure.preference.SettingsProvider
 import javax.inject.Inject
-
-private const val TAG = "FeedsViewModel"
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -60,7 +59,9 @@ class FeedsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _feedsUiState =
-        MutableStateFlow(FeedsUiState())
+        MutableStateFlow(FeedsUiState()
+
+        )
     val feedsUiState: StateFlow<FeedsUiState> = _feedsUiState.asStateFlow()
 
     val syncWorkLiveData = workManager.getWorkInfosByTagLiveData(SyncWorker.SYNC_TAG)
@@ -69,6 +70,35 @@ class FeedsViewModel @Inject constructor(
     val groupWithFeedsListFlow = groupWithFeedsListUseCase.groupWithFeedListFlow
 
     var currentJob: Job? = null
+    private var unreadMapJob: Job? = null
+
+    private var readMapJob: Job? = null
+
+    private fun startReadCountCollector() {
+        if (readMapJob?.isActive == true) return
+        readMapJob = viewModelScope.launch {
+            // Map of feedId -> readCount
+            rssService.get()
+                .pullImportant(isStarred = false, isUnread = false)
+                .flowOn(defaultDispatcher)
+                .collect { counts ->
+                    _feedsUiState.update { it.copy(readCountMap = counts) }
+                }
+        }
+    }
+
+    private fun startUnreadCountCollector() {
+        if (unreadMapJob?.isActive == true) return
+        unreadMapJob = viewModelScope.launch {
+            // Map of feedId -> unreadCount
+            rssService.get()
+                .pullImportant(isStarred = false, isUnread = true)
+                .flowOn(defaultDispatcher)
+                .collect { counts ->
+                    _feedsUiState.update { it.copy(unreadCountMap = counts) }
+                }
+        }
+    }
 
     fun sync() {
         applicationScope.launch(ioDispatcher) {
@@ -81,9 +111,14 @@ class FeedsViewModel @Inject constructor(
     fun changeFilter(filterState: FilterState) {
         filterStateUseCase.updateFilterState(filterState)
     }
-
     init {
+        startUnreadCountCollector()
+        startReadCountCollector()
+        startUnreadCountCollector()
+        startReadCountCollector()
+
         val accountFlow = accountService.currentAccountFlow
+
         viewModelScope.launch {
             accountFlow.collect { account ->
                 _feedsUiState.update { it.copy(account = account) }
@@ -91,20 +126,31 @@ class FeedsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             filterStateUseCase.filterStateFlow.mapLatest { it.filter }
-                .combine(accountFlow) { filter, account ->
-                    filter
-                }
-                .collect {
+                .combine(accountFlow) { filter, _ -> filter }
+                .collect { filter ->
                     currentJob?.cancel()
-                    currentJob = when (it) {
+                    currentJob = when (filter) {
                         Filter.Unread -> pullUnreadFeeds()
                         Filter.Starred -> pullStarredFeeds()
-                        else -> pullAllFeeds()
+                        Filter.Read   -> pullReadFeeds()
+                        else          -> pullAllFeeds()
                     }
                 }
         }
     }
+    private fun pullReadFeeds(): Job {
+        val readCountMapFlow = rssService.get().pullImportant(isStarred = false, isUnread = false)
+        // This will get all non-unread, non-starred → essentially read items
 
+        return viewModelScope.launch {
+            readCountMapFlow.mapLatest {
+                val sum = it.values.sum()
+                androidStringsHelper.getQuantityString(R.plurals.read_desc, sum, sum)
+            }.flowOn(defaultDispatcher).collect { text ->
+                _feedsUiState.update { it.copy(importantSum = text) }
+            }
+        }
+    }
     private fun pullAllFeeds(): Job {
         val articleCountMapFlow =
             rssService.get().pullImportant(isStarred = false, isUnread = false)
@@ -219,4 +265,6 @@ data class FeedsUiState(
     val importantSum: String = "",
     val listState: LazyListState = LazyListState(),
     val groupsVisible: SnapshotStateMap<String, Boolean> = mutableStateMapOf(),
+    val unreadCountMap: Map<String, Int> = emptyMap(),
+    val readCountMap: Map<String, Int> = emptyMap(),
 )

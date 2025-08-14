@@ -273,7 +273,10 @@ abstract class AbstractRssRepository(
                     sortAscending = sortAscending
                 )
 
-                else -> articleDao.queryArticleWithFeedWhenIsAll(accountId)
+                else -> articleDao.queryArticleWithFeedWhenIsAllRandom(
+                    accountId = accountId,
+                    sortAscending = sortAscending
+                )
             }
         }
     }

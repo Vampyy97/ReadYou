@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.ash.reader.domain.model.article.ArticleFlowItem
 import me.ash.reader.domain.model.article.mapPagingFlowItem
+import me.ash.reader.domain.model.general.Filter
 import me.ash.reader.domain.service.AccountService
 import me.ash.reader.domain.service.RssService
 import me.ash.reader.infrastructure.android.AndroidStringsHelper
@@ -78,35 +79,84 @@ constructor(
                     mutablePagerFlow.value =
                         PagerData(
                             Pager(
-                                    config = PagingConfig(pageSize = 50, enablePlaceholders = false)
-                                ) {
-                                    if (!searchContent.isNullOrBlank()) {
-                                        rssService
-                                            .get()
-                                            .searchArticles(
-                                                content = searchContent.trim(),
-                                                groupId = filterState.group?.id,
-                                                feedId = filterState.feed?.id,
-                                                isStarred = filterState.filter.isStarred(),
-                                                isUnread = filterState.filter.isUnread(),
-                                                sortAscending =
-                                                    settingsProvider.settings.flowSortUnreadArticles
-                                                        .value,
-                                            )
-                                    } else {
-                                        rssService
-                                            .get()
-                                            .pullArticles(
-                                                groupId = filterState.group?.id,
-                                                feedId = filterState.feed?.id,
-                                                isStarred = filterState.filter.isStarred(),
-                                                isUnread = filterState.filter.isUnread(),
-                                                sortAscending =
-                                                    settingsProvider.settings.flowSortUnreadArticles
-                                                        .value,
-                                            )
+                                config = PagingConfig(pageSize = 50, enablePlaceholders = false)
+                            ) {
+                                val sortAsc = settingsProvider.settings.flowSortUnreadArticles.value
+
+                                if (!searchContent.isNullOrBlank()) {
+                                    // SEARCH path
+                                    when (filterState.filter) {
+                                        Filter.Unread -> rssService.get().searchArticles(
+                                            content = searchContent.trim(),
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            isUnread = true,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
+                                        Filter.Read -> rssService.get().searchArticles(
+                                            content = searchContent.trim(),
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            // service can’t filter “read only”; pass both false and we’ll hide unread in UI
+                                            isUnread = false,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
+                                        Filter.Starred -> rssService.get().searchArticles(
+                                            content = searchContent.trim(),
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            isUnread = false,
+                                            isStarred = true,
+                                            sortAscending = sortAsc,
+                                        )
+                                        else -> rssService.get().searchArticles(
+                                            content = searchContent.trim(),
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            // In your service signature these are required; “all” = don’t filter
+                                            isUnread = false,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
+                                    }
+                                } else {
+                                    // NORMAL list path
+                                    when (filterState.filter) {
+                                        Filter.Unread -> rssService.get().pullArticles(
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            isUnread = true,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
+                                        Filter.Read -> rssService.get().pullArticles(
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            // service can’t filter “read only”; pass both false and we’ll hide unread in UI
+                                            isUnread = false,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
+                                        Filter.Starred -> rssService.get().pullArticles(
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            isUnread = false,
+                                            isStarred = true,
+                                            sortAscending = sortAsc,
+                                        )
+                                        else -> rssService.get().pullArticles(
+                                            groupId = filterState.group?.id,
+                                            feedId = filterState.feed?.id,
+                                            // “All” = don’t filter at the service level
+                                            isUnread = false,
+                                            isStarred = false,
+                                            sortAscending = sortAsc,
+                                        )
                                     }
                                 }
+                            }
                                 .flow
                                 .map { it.mapPagingFlowItem(androidStringsHelper) }
                                 .cachedIn(applicationScope),

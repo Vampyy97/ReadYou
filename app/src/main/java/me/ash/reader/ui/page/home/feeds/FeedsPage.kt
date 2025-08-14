@@ -1,5 +1,6 @@
 package me.ash.reader.ui.page.home.feeds
-
+import android.util.Log
+import me.ash.reader.domain.model.general.Filter
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -38,6 +39,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +87,8 @@ import me.ash.reader.ui.page.home.feeds.drawer.group.GroupOptionDrawer
 import me.ash.reader.ui.page.home.feeds.subscribe.SubscribeDialog
 import me.ash.reader.ui.page.home.feeds.subscribe.SubscribeViewModel
 import me.ash.reader.ui.page.settings.accounts.AccountViewModel
+import me.ash.reader.ui.page.home.feeds.FeedsViewModel
+import me.ash.reader.ui.ext.collectAsStateValue
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -117,7 +121,69 @@ fun FeedsPage(
     val feedsUiState = feedsViewModel.feedsUiState.collectAsStateValue()
     val filterState = feedsViewModel.filterStateFlow.collectAsStateValue()
     val importantSum = feedsUiState.importantSum
-    val groupWithFeedList = feedsViewModel.groupWithFeedsListFlow.collectAsStateValue()
+    val groupWithFeedList = feedsViewModel.groupWithFeedsListFlow.collectAsStateValue(initial = emptyList())
+    LaunchedEffect(feedsUiState.unreadCountMap) {
+        Log.d(
+            "ReadTab",
+            "hasUnread=${feedsUiState.unreadCountMap.isNotEmpty()} " +
+                    "keys=${feedsUiState.unreadCountMap.keys.take(5)}"
+        )
+    }
+    // Prefer readCountMap (any read items makes the feed "read").
+    // Fallbacks: unread==0, else badge==0 if we have no maps yet.
+    val hasReadMap = feedsUiState.readCountMap.isNotEmpty()
+    val hasUnreadMap = feedsUiState.unreadCountMap.isNotEmpty()
+    val isFeedRead: (String, Int) -> Boolean = { id, badge ->
+        val read = feedsUiState.readCountMap[id] ?: feedsUiState.readCountMap[id.toString()]
+        val unread = feedsUiState.unreadCountMap[id] ?: feedsUiState.unreadCountMap[id.toString()]
+        when {
+            hasReadMap -> (read ?: 0) > 0
+            hasUnreadMap -> (unread ?: Int.MAX_VALUE) == 0
+            else -> badge == 0
+        }
+    }
+
+    // The currently selected filter as an index (used in multiple places below)
+    val currentFilter = hiltViewModel<FeedsViewModel>()
+        .filterStateFlow
+        .collectAsStateValue()
+        .filter
+    val currentFilterIndex = currentFilter.index
+
+    Log.d(
+        "ReadTab",
+        "currentFilterIndex=" + currentFilterIndex +
+            ", readIdx=" + Filter.Read.index +
+            ", allIdx=" + Filter.All.index
+    )
+
+    val displayGroupWithFeedList =
+        when {
+            currentFilterIndex == Filter.All.index -> {
+                Log.d("ReadTab", "BRANCH=ALL")
+                groupWithFeedList
+                    .map { (group, feeds) -> group to feeds.shuffled() }
+                    .shuffled()
+            }
+            currentFilterIndex == Filter.Read.index -> {
+                Log.d("ReadTab", "BRANCH=READ")
+                groupWithFeedList
+                    .map { (group, feeds) ->
+                        val onlyRead = feeds.filter { feed ->
+                            val r = feedsUiState.readCountMap[feed.id]
+                            val u = feedsUiState.unreadCountMap[feed.id]
+                            Log.d("ReadTab", "feedId=${feed.id} read=${r ?: "?"} unread=${u ?: "?"} badge=${feed.important}")
+                            isFeedRead(feed.id, feed.important)
+                        }
+                        group to onlyRead
+                    }
+                    .filter { (_, f) -> f.isNotEmpty() }
+            }
+            else -> {
+                Log.d("ReadTab", "BRANCH=ELSE")
+                groupWithFeedList.map { (group, feeds) -> group to feeds }
+            }
+        }
     val groupsVisible: SnapshotStateMap<String, Boolean> = feedsUiState.groupsVisible
     val hasGroupVisible by
         remember(groupWithFeedList) {
@@ -279,7 +345,7 @@ fun FeedsPage(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    itemsIndexed(groupWithFeedList) { _, (group, feeds) ->
+                    itemsIndexed(displayGroupWithFeedList) { _, (group, feeds) ->
                         GroupWithFeedsContainer {
                             GroupItem(
                                 isExpanded = {
@@ -301,16 +367,18 @@ fun FeedsPage(
                             }
 
                             feeds.forEachIndexed { index, feed ->
+                                // Final guard: never render non-read feeds in Read tab
+                                if (currentFilterIndex == Filter.Read.index) {
+                                    if (!isFeedRead(feed.id, feed.important)) return@forEachIndexed
+                                }
+
                                 FeedItem(
                                     feed = feed,
+                                    showOnlyRead = (currentFilterIndex == Filter.Read.index),
                                     isLastItem = { index == feeds.lastIndex },
-                                    isExpanded = {
-                                        groupsVisible.getOrPut(feed.groupId, groupListExpand::value)
-                                    },
+                                    isExpanded = { groupsVisible.getOrPut(feed.groupId, groupListExpand::value) },
                                     onClick = {
-                                        feedsViewModel.changeFilter(
-                                            filterState.copy(feed = feed, group = null)
-                                        )
+                                        feedsViewModel.changeFilter(filterState.copy(feed = feed, group = null))
                                         navigationToFlow()
                                     },
                                     onLongClick = { scope.launch { feedDrawerState.show() } },

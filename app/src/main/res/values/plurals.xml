@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="read_desc">
+        <item quantity="one">%d archived item</item>
+        <item quantity="other">%d archived items</item>
+    </plurals>
+</resources>

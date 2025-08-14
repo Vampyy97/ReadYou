@@ -491,6 +491,21 @@ interface ArticleDao {
     @Transaction
     @Query(
         """
+        SELECT * FROM article 
+        WHERE accountId = :accountId
+        ORDER BY
+            RANDOM(),
+            CASE WHEN :sortAscending = 1 THEN date END ASC,
+            CASE WHEN :sortAscending = 0 THEN date END DESC
+        """
+    )
+    fun queryArticleWithFeedWhenIsAllRandom(
+        accountId: Int, sortAscending: Boolean = false
+    ): PagingSource<Int, ArticleWithFeed>
+
+    @Transaction
+    @Query(
+        """
         SELECT * FROM article
         WHERE isStarred = :isStarred 
         AND accountId = :accountId

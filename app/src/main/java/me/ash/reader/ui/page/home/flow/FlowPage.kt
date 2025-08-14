@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.BasicText
@@ -99,6 +103,13 @@ import me.ash.reader.ui.page.home.reading.PullToLoadDefaults.ContentOffsetMultip
 import me.ash.reader.ui.page.home.reading.PullToLoadState
 import me.ash.reader.ui.page.home.reading.pullToLoad
 import me.ash.reader.ui.page.home.reading.rememberPullToLoadState
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -156,6 +167,9 @@ fun FlowPage(
     val focusRequester = remember { FocusRequester() }
     var markAsRead by remember { mutableStateOf(false) }
     var onSearch by rememberSaveable { mutableStateOf(false) }
+// Date filter state (used by the top‑bar filter icon + the list predicate)
+    var dateBucket by rememberSaveable { mutableStateOf("ALL") } // TODAY | WEEK | OLDER | ALL
+    var filterMenu by remember { mutableStateOf(false) }
 
     var currentPullToLoadState: PullToLoadState? by remember { mutableStateOf(null) }
     var currentLoadAction: LoadAction? by remember { mutableStateOf(null) }
@@ -166,6 +180,7 @@ fun FlowPage(
         remember(listState) {
             snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                 .filterNotNull()
+
         }
 
     val onToggleStarred: (ArticleWithFeed) -> Unit = remember {
@@ -340,60 +355,97 @@ fun FlowPage(
                             }
                         },
                         actions = {
-                            RYExtensibleVisibility(visible = !filterUiState.filter.isStarred()) {
-                                FeedbackIconButton(
-                                    imageVector = Icons.Rounded.DoneAll,
-                                    contentDescription = stringResource(R.string.mark_all_as_read),
-                                    tint =
-                                        if (markAsRead) {
+                            Row(
+                                modifier = Modifier.padding(end = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // ✅ Done‑all icon (hidden on Starred)
+                                RYExtensibleVisibility(visible = !filterUiState.filter.isStarred()) {
+                                    Box(Modifier.size(24.dp)) {
+                                        FeedbackIconButton(
+                                            imageVector = Icons.Rounded.DoneAll,
+                                            contentDescription = stringResource(R.string.mark_all_as_read),
+                                            tint = if (markAsRead) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                        ) {
+                                            if (markAsRead) {
+                                                markAsRead = false
+                                            } else {
+                                                scope
+                                                    .launch {
+                                                        if (listState.firstVisibleItemIndex != 0) {
+                                                            listState.animateScrollToItem(0)
+                                                        }
+                                                    }
+                                                    .invokeOnCompletion {
+                                                        markAsRead = true
+                                                        onSearch = false
+                                                    }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 🧰 Filter icon + anchored menu
+                                Box {
+                                    Box(Modifier.size(24.dp)) {
+                                        FeedbackIconButton(
+                                            imageVector = Icons.Outlined.FilterList,
+                                            contentDescription = stringResource(R.string.filter),
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                        ) { filterMenu = true }
+                                    }
+                                    DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
+                                        DropdownMenuItem(text = { Text("Latest (Today)") }, onClick = {
+                                            dateBucket = "TODAY"; filterMenu = false
+                                        })
+                                        DropdownMenuItem(text = { Text("This Week (7 days)") }, onClick = {
+                                            dateBucket = "WEEK"; filterMenu = false
+                                        })
+                                        DropdownMenuItem(text = { Text("Older (before a week)") }, onClick = {
+                                            dateBucket = "OLDER"; filterMenu = false
+                                        })
+                                        HorizontalDivider()
+                                        DropdownMenuItem(text = { Text("Show All") }, onClick = {
+                                            dateBucket = "ALL"; filterMenu = false
+                                        })
+                                    }
+                                }
+
+                                // 🔎 Search icon
+                                Box(Modifier.size(24.dp)) {
+                                    FeedbackIconButton(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = stringResource(R.string.search),
+                                        tint = if (onSearch) {
                                             MaterialTheme.colorScheme.primary
                                         } else {
                                             MaterialTheme.colorScheme.onSurface
                                         },
-                                ) {
-                                    if (markAsRead) {
-                                        markAsRead = false
-                                    } else {
-                                        scope
-                                            .launch {
-                                                if (listState.firstVisibleItemIndex != 0) {
-                                                    listState.animateScrollToItem(0)
+                                    ) {
+                                        if (onSearch) {
+                                            onSearch = false
+                                        } else {
+                                            scope
+                                                .launch {
+                                                    if (listState.firstVisibleItemIndex != 0) {
+                                                        listState.animateScrollToItem(0)
+                                                    }
                                                 }
-                                            }
-                                            .invokeOnCompletion {
-                                                markAsRead = true
-                                                onSearch = false
-                                            }
+                                                .invokeOnCompletion {
+                                                    scope.launch {
+                                                        onSearch = true
+                                                        markAsRead = false
+                                                        delay(100)
+                                                        focusRequester.requestFocus()
+                                                    }
+                                                }
+                                        }
                                     }
-                                }
-                            }
-                            FeedbackIconButton(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = stringResource(R.string.search),
-                                tint =
-                                    if (onSearch) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                            ) {
-                                if (onSearch) {
-                                    onSearch = false
-                                } else {
-                                    scope
-                                        .launch {
-                                            if (listState.firstVisibleItemIndex != 0) {
-                                                listState.animateScrollToItem(0)
-                                            }
-                                        }
-                                        .invokeOnCompletion {
-                                            scope.launch {
-                                                onSearch = true
-                                                markAsRead = false
-                                                delay(100)
-                                                focusRequester.requestFocus()
-                                            }
-                                        }
                                 }
                             }
                         },
@@ -484,6 +536,22 @@ fun FlowPage(
                     val pager = flowUiState.pagerData.pager
                     val filterState = flowUiState.pagerData.filterState
                     val pagingItems = pager.collectAsLazyPagingItems().also { pagingItems = it }
+
+                    // Predicate that shows/hides articles based on the selected date bucket
+                    val showArticle: (ArticleWithFeed) -> Boolean = remember(dateBucket) {
+                        { awf ->
+                            val epochMillis = awf.article.date?.time ?: 0L // handle Date?
+                            val zone = ZoneId.systemDefault()
+                            val artDate = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
+                            val today = LocalDate.now(zone)
+                            when (dateBucket) {
+                                "TODAY" -> artDate == today
+                                "WEEK"  -> !artDate.isBefore(today.minusDays(6)) && !artDate.isAfter(today)
+                                "OLDER" -> artDate.isBefore(today.minusDays(7))
+                                else     -> true
+                            }
+                        }
+                    }
 
                     if (markAsReadOnScroll && filterState.filter.isUnread()) {
                         LaunchedEffect(listState.isScrollInProgress) {
@@ -644,6 +712,9 @@ fun FlowPage(
                                 onMarkAboveAsRead = onMarkAboveAsRead,
                                 onMarkBelowAsRead = onMarkBelowAsRead,
                                 onShare = onShare,
+                                showArticle = showArticle,
+                                hideDateRows = dateBucket != "ALL",
+
                             )
                             item {
                                 Spacer(modifier = Modifier.height(128.dp))

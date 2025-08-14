@@ -67,7 +67,9 @@ fun FilterBar(
         ) {
 
             Spacer(modifier = Modifier.width(filterBarPadding))
-            Filter.values.forEach { item ->
+            val items = listOf(Filter.All, Filter.Unread, Filter.Starred, Filter.Read)
+            items.forEach { item ->
+                val isSelected = (item.index == filter.index)
                 NavigationBarItem(
                     modifier = Modifier.height(containerHeight),
                     alwaysShowLabel = when (filterBarStyle) {
@@ -78,7 +80,7 @@ fun FilterBar(
                     },
                     icon = {
                         Icon(
-                            imageVector = if (filter == item && filterBarFilled) {
+                            imageVector = if (isSelected && filterBarFilled) {
                                 item.iconFilled
                             } else {
                                 item.iconOutline
@@ -98,7 +100,7 @@ fun FilterBar(
                             )
                         }
                     },
-                    selected = filter == item,
+                    selected = isSelected,
                     onClick = {
 //                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         view.playSoundEffect(SoundEffectConstants.CLICK)

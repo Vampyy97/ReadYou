@@ -2,6 +2,8 @@ package me.ash.reader.domain.model.general
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Subject
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.rounded.FiberManualRecord
 import androidx.compose.material.icons.rounded.Star
@@ -17,6 +19,8 @@ import me.ash.reader.R
 import me.ash.reader.domain.model.general.Filter.Companion.All
 import me.ash.reader.domain.model.general.Filter.Companion.Starred
 import me.ash.reader.domain.model.general.Filter.Companion.Unread
+
+
 
 /**
  * Indicates filter conditions.
@@ -34,12 +38,14 @@ class Filter private constructor(
     fun isStarred(): Boolean = this == Starred
     fun isUnread(): Boolean = this == Unread
     fun isAll(): Boolean = this == All
+    fun isRead(): Boolean = this == Read
 
     @Stable
     @Composable
     fun toName(): String = when (this) {
         Unread -> stringResource(R.string.unread)
         Starred -> stringResource(R.string.starred)
+        Read -> stringResource(R.string.read)
         else -> stringResource(R.string.all)
     }
 
@@ -48,8 +54,9 @@ class Filter private constructor(
     @Composable
     fun toDesc(important: Int): String = when (this) {
         Starred -> pluralStringResource(R.plurals.starred_desc, important, important)
-        Unread -> pluralStringResource(R.plurals.unread_desc, important, important)
-        else -> pluralStringResource(R.plurals.all_desc, important, important)
+        Unread  -> pluralStringResource(R.plurals.unread_desc, important, important)
+        Read    -> pluralStringResource(R.plurals.read_desc, important, important)
+        else    -> pluralStringResource(R.plurals.all_desc, important, important)
     }
 
     companion object {
@@ -69,6 +76,11 @@ class Filter private constructor(
             iconOutline = Icons.AutoMirrored.Rounded.Subject,
             iconFilled = Icons.AutoMirrored.Rounded.Subject,
         )
-        val values = listOf(Starred, Unread, All)
+        val Read = Filter(
+            index = 3,
+            iconOutline = Icons.Outlined.DoneAll,
+            iconFilled  = Icons.Filled.DoneAll,
+        )
+        val values = listOf(Starred, Unread, All, Read)
     }
 }

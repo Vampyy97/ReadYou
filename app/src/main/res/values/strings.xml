@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="read">Read</string>
+    <string name="filter_read_feeds">Read</string>
+    <string name="filter">Filter</string>
     <string name="read_you" translatable="false">Read You</string>
     <string name="all">All</string>
     <plurals name="all_desc">

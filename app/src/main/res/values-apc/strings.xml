@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="read">Read</string>
+    <string name="filter">Filter</string>
     <string name="cancel">كَنسِل</string>
     <plurals name="all_desc">
         <item quantity="one">%1$d غرض بال أرشيڤ</item>

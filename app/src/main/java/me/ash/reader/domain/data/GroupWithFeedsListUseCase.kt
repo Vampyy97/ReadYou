@@ -72,9 +72,12 @@ class GroupWithFeedsListUseCase @Inject constructor(
     private val hideEmptyGroups get() = settingsProvider.settings.hideEmptyGroups.value
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    private val readCountMapFlow =
+        rssService.get().pullImportant(isStarred = false, isUnread = false)
     private fun pullAllFeeds(): Job {
         val articleCountMapFlow =
             rssService.get().pullImportant(isStarred = false, isUnread = false)
+
 
         return applicationScope.launch {
             feedsFlow.combine(articleCountMapFlow) { groupWithFeedsList, articleCountMap ->
