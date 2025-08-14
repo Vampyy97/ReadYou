@@ -129,26 +129,15 @@ fun FeedsPage(
                     "keys=${feedsUiState.unreadCountMap.keys.take(5)}"
         )
     }
-    // Prefer readCountMap (any read items makes the feed "read").
-    // Fallbacks: unread==0, else badge==0 if we have no maps yet.
-    val hasReadMap = feedsUiState.readCountMap.isNotEmpty()
-    val hasUnreadMap = feedsUiState.unreadCountMap.isNotEmpty()
-    val isFeedRead: (String, Int) -> Boolean = { id, badge ->
-        val read = feedsUiState.readCountMap[id] ?: feedsUiState.readCountMap[id.toString()]
-        val unread = feedsUiState.unreadCountMap[id] ?: feedsUiState.unreadCountMap[id.toString()]
-        when {
-            hasReadMap -> (read ?: 0) > 0
-            hasUnreadMap -> (unread ?: Int.MAX_VALUE) == 0
-            else -> badge == 0
-        }
+    // Treat missing key as zero unread so fully-read feeds (no row in the map) are included
+    val isFeedFullyRead: (String) -> Boolean = { id ->
+        // Treat missing key as zero unread so fully-read feeds (no row in the map) are included
+        (feedsUiState.unreadCountMap[id] ?: 0) == 0
     }
 
-    // The currently selected filter as an index (used in multiple places below)
-    val currentFilter = hiltViewModel<FeedsViewModel>()
-        .filterStateFlow
-        .collectAsStateValue()
-        .filter
-    val currentFilterIndex = currentFilter.index
+    // Use the existing filterState from the same ViewModel instance
+    val showOnlyRead = filterState.filter == Filter.Read
+    val currentFilterIndex = filterState.filter.index
 
     Log.d(
         "ReadTab",
@@ -156,28 +145,35 @@ fun FeedsPage(
             ", readIdx=" + Filter.Read.index +
             ", allIdx=" + Filter.All.index
     )
+    val unreadMap = feedsUiState.unreadCountMap
+    val hasUnreadMap = unreadMap.isNotEmpty()
 
     val displayGroupWithFeedList =
-        when {
-            currentFilterIndex == Filter.All.index -> {
+        when (filterState.filter) {
+            Filter.All -> {
                 Log.d("ReadTab", "BRANCH=ALL")
                 groupWithFeedList
                     .map { (group, feeds) -> group to feeds.shuffled() }
                     .shuffled()
             }
-            currentFilterIndex == Filter.Read.index -> {
-                Log.d("ReadTab", "BRANCH=READ")
-                groupWithFeedList
-                    .map { (group, feeds) ->
-                        val onlyRead = feeds.filter { feed ->
-                            val r = feedsUiState.readCountMap[feed.id]
-                            val u = feedsUiState.unreadCountMap[feed.id]
-                            Log.d("ReadTab", "feedId=${feed.id} read=${r ?: "?"} unread=${u ?: "?"} badge=${feed.important}")
-                            isFeedRead(feed.id, feed.important)
+            Filter.Read -> {
+                Log.d("ReadTab", "BRANCH=READ hasUnread=$hasUnreadMap keys=${unreadMap.keys.take(5)}")
+                if (!hasUnreadMap) {
+                    // Unread map not ready yet; render nothing to avoid flashing incorrect items
+                    emptyList()
+                } else {
+                    groupWithFeedList
+                        .map { (group, feeds) ->
+                            val onlyRead = feeds.filter { feed ->
+                                val unread = unreadMap[feed.id] ?: 0
+                                val fullyRead = unread == 0
+                                Log.d("ReadTab", "feedId=${feed.id} unread=$unread fullyRead=$fullyRead")
+                                fullyRead
+                            }
+                            group to onlyRead
                         }
-                        group to onlyRead
-                    }
-                    .filter { (_, f) -> f.isNotEmpty() }
+                        .filter { (_, f) -> f.isNotEmpty() }
+                }
             }
             else -> {
                 Log.d("ReadTab", "BRANCH=ELSE")
@@ -368,13 +364,15 @@ fun FeedsPage(
 
                             feeds.forEachIndexed { index, feed ->
                                 // Final guard: never render non-read feeds in Read tab
-                                if (currentFilterIndex == Filter.Read.index) {
-                                    if (!isFeedRead(feed.id, feed.important)) return@forEachIndexed
+                                if (showOnlyRead && !isFeedFullyRead(feed.id)) {
+                                    Log.d("ReadTab", "SKIP feed=${feed.id} unread=${feedsUiState.unreadCountMap[feed.id]}")
+                                    return@forEachIndexed
                                 }
+                                Log.d("ReadTab", "RENDER feed=${feed.id}")
 
                                 FeedItem(
                                     feed = feed,
-                                    showOnlyRead = (currentFilterIndex == Filter.Read.index),
+                                    showOnlyRead = showOnlyRead,
                                     isLastItem = { index == feeds.lastIndex },
                                     isExpanded = { groupsVisible.getOrPut(feed.groupId, groupListExpand::value) },
                                     onClick = {
